@@ -1,3 +1,5 @@
+#https://www.kegg.jp/dbget-bin/www_bget?pathway+hsa05224
+#http://togows.dbcls.jp/entry/pathway/hsa05224/genes.json
 [
   {
     "2099": "ESR1; estrogen receptor 1 [KO:K08550]",

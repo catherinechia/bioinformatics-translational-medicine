@@ -1,3 +1,4 @@
+https://www.kegg.jp/entry/hsa05224
 Gene; Remarks
 TP53; tumor protein p53 [KO:K04451]
 PIK3CA; phosphatidylinositol-4,5-bisphosphate 3-kinase catalytic subunit alpha [KO:K00922] [EC:2.7.1.153]
