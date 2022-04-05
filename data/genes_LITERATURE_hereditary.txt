@@ -1,0 +1,4 @@
+Gene; Remarks
+BRCA1; BRCA1 DNA repair associated [KO:K10605] [EC:2.3.2.27]
+BRCA2; BRCA2 DNA repair associated [KO:K08775]
+GATA3; GATA binding protein 3
