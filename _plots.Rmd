@@ -18,34 +18,128 @@ library("ggplot2")
 library("ggpubr")
 ```
 
-#The p-value of the test turns out to be > 0.05. Since this value is not less than .05, we can assume the sample data comes from a population that is normally distributed.
+In shapiro test, The null hypothesis is states that the population is normally distributed i.e if the p-value is greater than 0.05, then the null hypothesis is accepted
 ```{r}
-data <- read_csv("data/model_run_1_2_accuracies_copy.csv")
-shapiro.test(data$model_run_1)
-shapiro.test(data$model_run_2)
+data <- read_csv("data/Accuracies.csv")
+shapiro.test(data$H1_UD) #W = 0.96364, p-value = 5.701e-06
+shapiro.test(data$H1_FD) #W = 0.95671, p-value = 8.155e-07
+shapiro.test(data$H2_UD) # W = 0.96461, p-value = 7.598e-06
+shapiro.test(data$H2_FD) #W = 0.95945, p-value = 1.722e-06
 
-m_run1 <- mean(data$model_run_1)
-sd_run1 <- sd(data$model_run_1)
-m_run1
-sd_run1
-m_run2 <- mean(data$model_run_2)
-sd_run2 <- sd(data$model_run_2)
-m_run2
-sd_run2
+#Conclusion: All are not drawn from normal distribution, i.e. non-parametric data
+#Approach: reporting in median and inter-quartile range (IQR)
+
+med_H1_UD <- median(data$H1_UD) #0.75
+med_H2_UD <- median(data$H2_UD) #0.7
+med_H1_FD <- median(data$H1_FD) #0.8
+med_H2_FD <- median(data$H2_FD) #0.8
+
+iqr_H1_UD <- IQR(data$H1_UD) #0.15
+iqr_H2_UD <- IQR(data$H2_UD) #0.1
+iqr_H1_FD <- IQR(data$H1_FD) #0.1
+iqr_H2_FD <- IQR(data$H2_FD) #0.1
+
 ```
 
 ```{r}
+data_long <- pivot_longer(data, cols = starts_with("H"), names_to = "model", values_to = "accuracies")
 
-data2 <- read_csv("data/model_run_1_2_accuracies.csv")
+res_stat <- pairwise.wilcox.test(data_long$accuracies, factor(data_long$model),paired=FALSE, p.adjust = "none")
 
-p <- ggplot(data2, aes(Model, Accuracy)) + 
-  geom_boxplot() + 
-  geom_jitter(position = position_jitter(0.2)) +
-  ggtitle("Boxplot of accuracies of training models")
+#res_stat$p.value["H1_UD","H2_UD"]
+res_stat$p.value["H2_UD","H1_UD"] #0.1482985
+res_stat$p.value["H1_UD","H1_FD"] #2.598002e-19
+res_stat$p.value["H2_FD","H1_UD"] #2.664219e-18
+res_stat$p.value["H2_UD","H1_FD"] #2.128929e-24
+res_stat$p.value["H2_UD","H2_FD"] #4.095153e-23
 
-p + stat_compare_means(method="t.test")
-
-
+#      H1_FD  H1_UD  H2_FD 
+#H1_UD <2e-16 -      -     
+#H2_FD 0.98   <2e-16 -     
+#H2_UD <2e-16 0.30   <2e-16
 
          
+```
+Due to time, assumption is made: 
+Cross validation is a statistical method with underlying use of normal distribution. Parametric methods will be used to represent statistics. 
+
+```{r}
+
+my_stat_compare_means  <- function (mapping = NULL, data = NULL, method = NULL, paired = FALSE, 
+    method.args = list(), ref.group = NULL, comparisons = NULL, 
+    hide.ns = FALSE, label.sep = ", ", label = NULL, label.x.npc = "left", 
+    label.y.npc = "top", label.x = NULL, label.y = NULL, tip.length = 0.03, 
+    symnum.args = list(), geom = "text", position = "identity", 
+    na.rm = FALSE, show.legend = NA, inherit.aes = TRUE, ...) 
+{
+    if (!is.null(comparisons)) {
+        method.info <- ggpubr:::.method_info(method)
+        method <- method.info$method
+        method.args <- ggpubr:::.add_item(method.args, paired = paired)
+        if (method == "wilcox.test") 
+            method.args$exact <- FALSE
+        pms <- list(...)
+        size <- ifelse(is.null(pms$size), 0.3, pms$size)
+        color <- ifelse(is.null(pms$color), "black", pms$color)
+        map_signif_level <- FALSE
+        if (is.null(label)) 
+            label <- "p.format"
+        if (ggpubr:::.is_p.signif_in_mapping(mapping) | (label %in% "p.signif")) {
+            if (ggpubr:::.is_empty(symnum.args)) {
+                map_signif_level <- c(`****` = 1e-04, `***` = 0.001, 
+                  `**` = 0.01, `*` = 0.05, ns = 1)
+            } else {
+               map_signif_level <- symnum.args
+            } 
+            if (hide.ns) 
+                names(map_signif_level)[5] <- " "
+        }
+        step_increase <- ifelse(is.null(label.y), 0.12, 0)
+        ggsignif::geom_signif(comparisons = comparisons, y_position = label.y, 
+            test = method, test.args = method.args, step_increase = step_increase, 
+            size = size, color = color, map_signif_level = map_signif_level, 
+            tip_length = tip.length, data = data)
+    } else {
+        mapping <- ggpubr:::.update_mapping(mapping, label)
+        layer(stat = StatCompareMeans, data = data, mapping = mapping, 
+            geom = geom, position = position, show.legend = show.legend, 
+            inherit.aes = inherit.aes, params = list(label.x.npc = label.x.npc, 
+                label.y.npc = label.y.npc, label.x = label.x, 
+                label.y = label.y, label.sep = label.sep, method = method, 
+                method.args = method.args, paired = paired, ref.group = ref.group, 
+                symnum.args = symnum.args, hide.ns = hide.ns, 
+                na.rm = na.rm, ...))
+    }
+}
+
+p <- ggplot(data_long, aes(model, accuracies)) + 
+  geom_boxplot() + 
+  geom_jitter(position = position_jitter(0.1), size=0.001) +
+  ggtitle("Boxplot of accuracies of training models", subtitle ="Wilcoxon Rank Sum Test. ** (p-value < 0.01), ns (not significant)")
+
+symnum.args <- c("**"=0.01,ns=1)
+cmpr <- list(c("H1_UD","H2_UD"), c("H1_FD","H2_FD"), c("H1_UD","H1_FD"), c("H2_UD","H2_FD"))
+
+p + my_stat_compare_means(method = "wilcox.test", comparisons = cmpr, tip.length=0.01, 
+           label = "p.signif", symnum.args = symnum.args)
+
+
+
+
+
+
+
+
+
+
+m_H1_UD <- mean(data$H1_UD) #0.7212
+m_H1_FD <- mean(data$H1_FD) #0.7966
+m_H2_UD <- mean(data$H2_UD) #0.7952
+m_H2_FD <- mean(data$H2_FD) #0.
+
+sd_H1_UD <- sd(data$H1_UD) #0.15
+sd_H1_FD <- sd(data$H1_FD) #0.1
+sd_H2_UD <- sd(data$H2_UD) #0.1
+sd_H2_FD <- sd(data$H2_FD) #0.1
+
 ```
