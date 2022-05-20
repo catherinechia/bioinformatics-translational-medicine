@@ -1,0 +1,51 @@
+---
+title: "Untitled"
+author: "catchia"
+date: '2022-05-01'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 
+
+```{r}
+library("tidyverse")
+library("ggplot2")
+
+library("ggpubr")
+```
+
+#The p-value of the test turns out to be > 0.05. Since this value is not less than .05, we can assume the sample data comes from a population that is normally distributed.
+```{r}
+data <- read_csv("data/model_run_1_2_accuracies_copy.csv")
+shapiro.test(data$model_run_1)
+shapiro.test(data$model_run_2)
+
+m_run1 <- mean(data$model_run_1)
+sd_run1 <- sd(data$model_run_1)
+m_run1
+sd_run1
+m_run2 <- mean(data$model_run_2)
+sd_run2 <- sd(data$model_run_2)
+m_run2
+sd_run2
+```
+
+```{r}
+
+data2 <- read_csv("data/model_run_1_2_accuracies.csv")
+
+p <- ggplot(data2, aes(Model, Accuracy)) + 
+  geom_boxplot() + 
+  geom_jitter(position = position_jitter(0.2)) +
+  ggtitle("Boxplot of accuracies of training models")
+
+p + stat_compare_means(method="t.test")
+
+
+
+         
+```
