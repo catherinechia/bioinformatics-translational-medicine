@@ -11,6 +11,8 @@ from sklearn.metrics import accuracy_score
 from sklearn.feature_selection import mutual_info_classif
 from numpy import mean, std
 import matplotlib.pyplot as plt
+from statistics import mean as mean2
+from statistics import stdev
 
 
 
@@ -26,12 +28,22 @@ def classify(file, dict1):
 
     #file.to_csv('Train_117.csv')
 
+    train117 = pd.read_csv('Train_117.csv')
+
     file = file.transpose()
-    feature_names = [f"feature {i}" for i in range(file.shape[1])]
-    print(feature_names)
+    #feature_names = [f"region {i}" for i in range(file.shape[1])]
+    feature_names = [f"region {i}" for i in train117['Unnamed: 0']]
 
     # Drop the first 4 columns eg. Chromosome, Start, etc.
     file.drop(['Chromosome', 'Start', 'End', 'Nclone'], inplace=True)
+
+
+    # Drop highly correlated ones
+    corrm = file.corr().abs()
+    upper_tri = corrm.where(np.triu(np.ones(corrm.shape), k=1).astype(np.bool))
+    to_drop = [column for column in upper_tri.columns if any(upper_tri[column] > 0.9)]
+    file = file.drop(file[to_drop], axis=1)
+    print(file)
 
     with open('Train_clinical', 'r') as f:
         f = pd.read_csv(f, delimiter='\t')
@@ -43,32 +55,46 @@ def classify(file, dict1):
     X = features
     y = labels
 
+    # mutual info classifier
     info = mutual_info_classif(X, y)
     info = info[info>0.5]
     #print(info)
 
+
+    # PCA
+    flag = False
+    if flag:
+        file = file.iloc[:,0:100]
+        pca = PCA(n_components=35)
+        components = pca.fit_transform(file)
+        pca_df = pca.explained_variance_ratio_.cumsum()
+        print(pca_df)
+        X = components
+
+
+
     x_train, x_test, y_train1, y_test1 = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    flag = True
+    flag = False
     if flag:
         # configure the cross-validation procedure
         cv_outer = KFold(n_splits=5, shuffle=True, random_state=1)
         # enumerate splits
         outer_results = list()
-        for train_ix, test_ix in cv_outer.split(x_train):
+        for train_ix, test_ix in cv_outer.split(X):
             # split data
-            X_train, X_test = x_train[train_ix, :], x_train[test_ix, :]
-            y_train, y_test = y_train1[train_ix], y_train1[test_ix]
+            X_train, X_test = X[train_ix, :], X[test_ix, :]
+            y_train, y_test = y[train_ix], y[test_ix]
             # configure the cross-validation procedure
             cv_inner = KFold(n_splits=4, shuffle=True, random_state=1)
             # define the model
             model = RandomForestClassifier(random_state=1)
             # define search space
 
-            space = {'n_estimators' : [1000, 1500,2000],
+            space = {'n_estimators' : [300, 1000, 1500],
                      'max_features' : [10, 20, 50],
-                     'max_depth' : [30, 40],
-                     'bootstrap' : [True, False]}
+                     'max_depth' : [5, 15, 30],
+                     'bootstrap' : [True]}
             # define search
             search = GridSearchCV(model, space, scoring='accuracy', cv=cv_inner, refit=True, return_train_score=True)
             # execute search
@@ -133,28 +159,42 @@ def classify(file, dict1):
         # summarize the estimated performance of the model
         print('Accuracy: %.3f (%.3f)' % (mean(outer_results), std(outer_results)))
 
-    model = RandomForestClassifier(n_estimators=1000, max_depth=30, bootstrap=True, max_features=50, random_state=42)
-    model.fit(x_train, y_train1)
-    pred = model.predict(x_test)
-    print("Accuracy on the test set is:", metrics.accuracy_score(y_test1, pred))
+    for i in range(1,20,2):
+
+        model = RandomForestClassifier(n_estimators=200, max_depth=20, min_samples_split=5, min_samples_leaf=1,
+                                            max_features="auto", bootstrap=True, random_state=i)
+        model.fit(X, y)
+        scores = cross_val_score(model, X, y, cv=5)
+        print("OG_hyperparameters: %0.2f accuracy with a standard deviation of %0.2f" % (scores.mean(), scores.std()))
+
+        model = RandomForestClassifier(n_estimators=1000, max_depth=30, bootstrap=True, max_features=50, random_state=i)
+        model.fit(X, y)
+        scores = cross_val_score(model, X, y, cv=5)
+        print("NEW_hyperparameters: %0.2f accuracy with a standard deviation of %0.2f" % (scores.mean(), scores.std()))
 
 
-    importances = model.feature_importances_
-    std1 = np.std([tree.feature_importances_ for tree in model.estimators_], axis=0)
-    forest_importances = pd.Series(importances, index=feature_names)
+    flag = False
+    if flag:
+        importances = model.feature_importances_
+        std1 = np.std([tree.feature_importances_ for tree in model.estimators_], axis=0)
+        forest_importances = pd.Series(importances, index=feature_names)
 
-    fig, ax = plt.subplots()
-    forest_importances.nlargest(10).plot(kind='barh')
-    ax.set_title("Top 10 most important features")
-    ax.set_xlabel("Mean decrease in impurity")
+        fig, ax = plt.subplots()
+        forest_importances.nlargest(10).plot(kind='barh')
+        ax.set_title("Top 10 most important features")
+        ax.set_xlabel("Mean decrease in impurity")
+        fig.set_size_inches(8, 6)
+        plt.savefig('imp_FD_t10.eps', dpi=1000, bbox_inches='tight',format='eps')
 
 
-    fig, ax = plt.subplots()
-    forest_importances.plot.bar(yerr=std1,ax=ax)
-    ax.set_title("Feature importances plot")
-    ax.set_ylabel("Mean decrease in impurity")
-    fig.tight_layout()
-    plt.show()
+        fig, ax = plt.subplots()
+        forest_importances.plot.bar(yerr=std1,ax=ax)
+        ax.set_title("Feature importances plot")
+        ax.set_ylabel("Mean decrease in impurity")
+        fig.tight_layout()
+        fig.set_size_inches(22, 8)
+        #plt.savefig('imp_FD.eps', dpi=1000, bbox_inches='tight', format='eps')
+        plt.savefig('imp_FD.png', dpi=1000, bbox_inches='tight')
 
 
 
